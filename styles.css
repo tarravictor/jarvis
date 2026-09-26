@@ -641,75 +641,92 @@ button:focus-visible,input:focus-visible,select:focus-visible {
   margin-top:14px;
   opacity:.7
 }
-.music-panel {
+/* Voice output and the separate YouTube Music browser-tab bridge. */
+.voice-panel,.music-bridge-panel {
   display:flex;
   align-items:center;
   gap:15px;
-  min-height:86px;
+  min-height:76px;
   border:1px solid var(--line);
   background:#091a28;
-  padding:13px 16px;
-  flex-wrap:wrap
+  padding:13px 16px
 }
-.music-art {
-  width:52px;
-  height:52px;
-  display:grid;
-  place-items:center;
-  background:radial-gradient(circle at 50% 50%,#195a6f,#0b3445 45%,#0c2432 47%);
-  border:1px solid #287185;
-  box-shadow:inset 0 0 15px #2de4ed30;
+.voice-icon,.music-bridge-icon {
+  width:48px;
+  height:48px;
   flex:none;
-  color:var(--cyan);
-  font-size:25px
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  border:1px solid #287185;
+  background:radial-gradient(circle,#14576d,#0b2939);
+  color:var(--cyan)
 }
-.music-info {
+.voice-icon span {
+  width:3px;
+  height:9px;
+  background:var(--cyan);
+  box-shadow:0 0 7px var(--cyan)
+}
+.voice-icon span:nth-child(2),.voice-icon span:nth-child(4) {
+  height:19px
+}
+.voice-icon span:nth-child(3) {
+  height:28px
+}
+.app[data-state="speaking"] .voice-icon span {
+  animation:voice-wave .6s ease-in-out infinite alternate
+}
+.app[data-state="speaking"] .voice-icon span:nth-child(even) {
+  animation-delay:.25s
+}
+@keyframes voice-wave {
+  to { transform:scaleY(.35) }
+}
+.music-bridge-icon {
+  border-color:#81404b;
+  background:radial-gradient(circle,#793742,#301f2d);
+  color:#ffcbd0;
+  font-size:22px
+}
+.voice-panel-copy,.music-bridge-copy {
   min-width:120px;
   flex:1
 }
-.music-info strong,.music-info small {
+.voice-panel-copy strong,.voice-panel-copy small,.music-bridge-copy strong,.music-bridge-copy small {
   display:block
 }
-.music-info strong {
-  font-size:13px;
-  margin-top:5px
+.voice-panel-copy strong,.music-bridge-copy strong {
+  font-size:12px;
+  margin-top:5px;
+  letter-spacing:.04em
 }
-.music-info small {
+.voice-panel-copy small,.music-bridge-copy small {
   font-size:10px;
+  line-height:1.45;
   color:var(--muted);
   margin-top:3px
 }
-.music-controls {
-  display:flex;
-  align-items:center;
-  gap:7px
+.panel-action {
+  border:1px solid var(--line-bright);
+  color:var(--cyan);
+  background:#0d2836;
+  padding:9px 11px;
+  white-space:nowrap;
+  font:10px var(--mono);
+  letter-spacing:.08em
 }
-.music-controls button {
-  border:0;
-  background:transparent;
-  color:var(--muted);
-  font-size:17px;
-  width:28px;
-  height:28px
+.panel-action:hover {
+  border-color:var(--cyan);
+  background:#154155
 }
-.music-controls button:hover {
-  color:var(--cyan)
+.bridge-guide {
+  color:var(--dim);
+  font:9px var(--mono);
+  white-space:nowrap
 }
-.music-controls .play-control {
-  background:var(--cyan);
-  color:#062330;
-  border-radius:50%;
-  width:37px;
-  height:37px;
-  font-size:13px;
-  box-shadow:0 0 15px #51e7f255
-}
-.music-panel audio {
-  width:100%;
-  height:30px;
-  filter:sepia(1) saturate(3) hue-rotate(135deg);
-  opacity:.72
-}
+.bridge-guide:hover { color:var(--cyan) }
 /* Conversation log and the typed-command fallback. */
 .chat-panel {
   height:630px;
@@ -1300,19 +1317,18 @@ button:focus-visible,input:focus-visible,select:focus-visible {
   .telemetry-foot {
     font-size:7px
   }
-  .music-panel {
-    gap:9px
+  .voice-panel,.music-bridge-panel {
+    gap:9px;
+    flex-wrap:wrap
   }
-  .music-art {
+  .voice-icon,.music-bridge-icon {
     width:40px;
     height:40px
   }
-  .music-info strong {
-    font-size:12px
+  .voice-panel-copy strong,.music-bridge-copy strong {
+    font-size:11px
   }
-  .music-controls {
-    gap:1px
-  }
+  .bridge-guide { margin-left:auto }
   .footer {
     font-size:7px
   }
@@ -1354,7 +1370,7 @@ body[data-theme="light"] .icon-button {
 body[data-theme="light"] .system-tag,body[data-theme="light"] .eyebrow,body[data-theme="light"] .accent-text {
   color:#087f9b
 }
-body[data-theme="light"] .telemetry-card,body[data-theme="light"] .music-panel,body[data-theme="light"] .tasks-panel,body[data-theme="light"] .chat-panel {
+body[data-theme="light"] .telemetry-card,body[data-theme="light"] .voice-panel,body[data-theme="light"] .music-bridge-panel,body[data-theme="light"] .tasks-panel,body[data-theme="light"] .chat-panel {
   background:#f8fcfd;
   border-color:#bed7de
 }
@@ -1366,7 +1382,7 @@ body[data-theme="light"] .power-button {
 body[data-theme="light"] .power-button[aria-pressed="false"] {
   background:#f8fcfd
 }
-body[data-theme="light"] .music-info small,body[data-theme="light"] .chat-entry p,body[data-theme="light"] .chat-empty p {
+body[data-theme="light"] .voice-panel-copy small,body[data-theme="light"] .music-bridge-copy small,body[data-theme="light"] .chat-entry p,body[data-theme="light"] .chat-empty p {
   color:#537481
 }
 body[data-theme="light"] .text-form {

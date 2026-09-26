@@ -10,7 +10,7 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="app" id="app" data-state="idle">
+  <div class="app" id="app" data-jarvis-app="true" data-state="idle">
     <header class="topbar">
       <div class="brand">
         <span class="brand-icon" aria-hidden="true"><span></span></span>
@@ -80,15 +80,17 @@
           </article>
         </div>
 
-        <section class="music-panel" aria-label="Music player">
-          <div class="music-art" aria-hidden="true"><span>♫</span></div>
-          <div class="music-info"><span class="eyebrow">AUDIO PLAYER</span><strong id="trackTitle">Orbit Drift</strong><small id="trackSubtitle">Built-in ambient playlist · 1 / 3</small></div>
-          <div class="music-controls">
-            <button id="previousTrack" type="button" aria-label="Previous track" title="Previous track">⏮</button>
-            <button id="playPause" class="play-control" type="button" aria-label="Play music" title="Play music">▶</button>
-            <button id="nextTrack" type="button" aria-label="Next track" title="Next track">⏭</button>
-          </div>
-          <audio id="musicPlayer" controls loop preload="none" aria-label="Built-in music player"></audio>
+        <section class="voice-panel" aria-label="Spoken replies">
+          <div class="voice-icon" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="voice-panel-copy"><span class="eyebrow">VOICE RESPONSE</span><strong id="voiceStatus">READY TO SPEAK</strong><small id="voiceHint">Jarvis replies aloud after every command.</small></div>
+          <button class="panel-action" id="testVoiceButton" type="button">TEST VOICE ↗</button>
+        </section>
+
+        <section class="music-bridge-panel" aria-label="YouTube Music connection">
+          <div class="music-bridge-icon" aria-hidden="true">♫</div>
+          <div class="music-bridge-copy"><span class="eyebrow">YOUTUBE MUSIC</span><strong id="musicBridgeStatus">CHECKING CONNECTION</strong><small id="musicBridgeHint">Play a song in YouTube Music, then ask Jarvis to pause or skip.</small></div>
+          <button class="panel-action" id="checkMusicButton" type="button">CHECK LINK ↗</button>
+          <a class="bridge-guide" href="setup.html" target="_blank" rel="noopener noreferrer">SETUP GUIDE</a>
         </section>
       </section>
 
@@ -112,7 +114,7 @@
   </div>
 
   <div class="permission-overlay" id="permissionOverlay" role="dialog" aria-modal="true" aria-labelledby="permissionTitle">
-    <div class="permission-card"><span class="permission-symbol" aria-hidden="true">◉</span><span class="eyebrow">MICROPHONE ACCESS</span><h2 id="permissionTitle">Your voice is the interface.</h2><p>Allow microphone access to enable wake-word commands and the live sound display. Your browser may ask for permission. You can still type commands without a mic.</p><p class="permission-message" id="permissionMessage">Requesting access…</p><button class="primary-action" id="grantMicButton" type="button">Enable microphone <span>↗</span></button><button class="secondary-action" id="continueWithoutMic" type="button">Continue with text only</button></div>
+    <div class="permission-card"><span class="permission-symbol" aria-hidden="true">◉</span><span class="eyebrow">MICROPHONE ACCESS</span><h2 id="permissionTitle">Your voice is the interface.</h2><p>Allow microphone access to speak commands and hear Jarvis reply. Your browser may ask for permission. You can still type commands and hear replies without a mic.</p><p class="permission-message" id="permissionMessage">Requesting access…</p><button class="primary-action" id="grantMicButton" type="button">Enable microphone <span>↗</span></button><button class="secondary-action" id="continueWithoutMic" type="button">Continue with text only</button></div>
   </div>
 
   <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
@@ -122,7 +124,7 @@
       <label class="field"><span>OpenWeatherMap API key</span><input id="weatherKeyInput" type="password" autocomplete="off" placeholder="Enter your key for weather"><small>Saved in this browser's local storage.</small></label>
       <label class="field"><span>Voice</span><select id="voiceSelect"><option value="">Automatic English voice</option></select></label>
       <label class="field"><span>Confidence threshold <output id="confidenceOutput">0.60</output></span><input id="confidenceInput" type="range" min="0" max="1" step="0.05" value="0.6"><small>A spoken wake word is accepted even if confidence is lower.</small></label>
-      <label class="switch-field"><span><strong>Spoken responses</strong><small>Keep recognition active while Jarvis speaks.</small></span><input id="ttsInput" type="checkbox" checked><span class="switch-ui" aria-hidden="true"></span></label>
+      <label class="switch-field"><span><strong>Spoken responses</strong><small>Jarvis talks back after every command. Listening stays active.</small></span><input id="ttsInput" type="checkbox" checked><span class="switch-ui" aria-hidden="true"></span></label>
       <button class="primary-action save-settings" type="submit">Save settings <span>✓</span></button>
     </form>
   </dialog>

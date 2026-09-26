@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect YouTube Music · J.A.R.V.I.S.</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#06111b;color:#e6f7fb}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 80% 0,#123b4c,#06111b 55%);padding:36px 20px}
+    main{max-width:760px;margin:auto;border:1px solid #245466;background:#0a1c29;padding:clamp(24px,5vw,48px);box-shadow:0 20px 80px #0007}
+    .eyebrow{color:#57e5ef;font:12px ui-monospace,monospace;letter-spacing:.16em}
+    h1{font-size:clamp(28px,5vw,45px);letter-spacing:.02em;margin:14px 0 12px}
+    h2{font-size:18px;margin:32px 0 12px}
+    p,li{color:#b9cbd3;line-height:1.65}
+    ol{padding-left:24px} li{padding:7px 0} li::marker{color:#57e5ef;font-weight:bold}
+    strong{color:#f0fbff} code{background:#102f3f;color:#93edf2;padding:2px 6px;border:1px solid #245466}
+    a{color:#72e7f0} a:hover{color:white}
+    .notice{border-left:3px solid #57e5ef;background:#102b3a;padding:14px 18px;margin:25px 0}
+    .button{display:inline-block;margin-top:16px;border:1px solid #57e5ef;background:#103746;padding:12px 18px;text-decoration:none;color:#dffbfc;font-weight:700}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">J.A.R.V.I.S. / MUSIC CONNECTION</div>
+    <h1>Connect YouTube Music</h1>
+    <p>Jarvis can speak back and control the song playing in another browser tab. Install the included music extension once to connect those tabs.</p>
+    <ol>
+      <li>Open Jarvis in <strong>Chrome, Edge, or Brave</strong>. Use the same browser for YouTube Music. The Codex in-app browser cannot load this extension.</li>
+      <li>Open your browser's extensions page: <code>chrome://extensions</code>, <code>edge://extensions</code>, or <code>brave://extensions</code>.</li>
+      <li>Switch on <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and select the <code>extension</code> folder inside <code>jarvis-assistant</code>.</li>
+      <li>If Jarvis is open from a file address (<code>file://</code>), open the extension's <strong>Details</strong> and switch on <strong>Allow access to file URLs</strong>. You can instead use a localhost address as described in the README.</li>
+      <li>Open <a href="https://music.youtube.com/" target="_blank" rel="noopener noreferrer">YouTube Music</a> and start a song once. Reload Jarvis, then click <strong>CHECK LINK</strong>.</li>
+    </ol>
+    <div class="notice"><strong>Try:</strong> “Hey Jarvis, pause,” “Hey Jarvis, play,” or “Hey Jarvis, skip.” Click <strong>TEST VOICE</strong> on the Jarvis page to hear a spoken sample.</div>
+    <h2>If it does not connect</h2>
+    <p>Make sure both tabs are in the browser with the extension. If Jarvis shows <strong>OPEN YOUTUBE MUSIC</strong>, open that tab. If it shows <strong>CHOOSE A SONG</strong>, start playback there. If it shows <strong>EXTENSION NOT CONNECTED</strong>, reload Jarvis and check the extension's file access switch when using a file address.</p>
+    <a class="button" href="index.html">← BACK TO JARVIS</a>
+  </main>
+</body>
+</html>

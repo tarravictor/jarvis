@@ -7,8 +7,9 @@
     'app','liveClock','settingsButton','modeStatus','detailStatus','interimTranscript',
     'orbCanvas','orbLevel','listeningToggle','toggleLabel','toggleHint','wakePrompt',
     'micState','noiseMeter','noiseMeterFill','noiseNote','noiseValue','wakeValue',
-    'uptime','restartCount','musicPlayer','trackTitle','trackSubtitle','previousTrack',
-    'playPause','nextTrack','chatList','chatEmpty','clearLog','textForm','textCommand',
+    'uptime','restartCount','voiceStatus','voiceHint','testVoiceButton',
+    'musicBridgeStatus','musicBridgeHint','checkMusicButton',
+    'chatList','chatEmpty','clearLog','textForm','textCommand',
     'tasksList','taskCount','notifyButton','permissionOverlay','permissionMessage','grantMicButton',
     'continueWithoutMic','settingsDialog','settingsForm','closeSettings',
     'wakeWordInput','weatherKeyInput','voiceSelect','confidenceInput',
@@ -34,17 +35,12 @@
     starts: 0, startedAt: Date.now(), lastError: '', detail: 'Requesting microphone access…',
     stream: null, micPromise: null, audioContext: null, source: null, analyser: null,
     samples: null, noiseBaseline: 0, noiseSamples: [], calibrating: false,
-    level: 0, isSpeaking: false, currentSpeech: null, processing: false, lastTranscript: '', lastTranscriptAt: 0,
+    level: 0, isSpeaking: false, voicePending: false, voiceError: '', currentSpeech: null,
+    voiceWatchdog: null, processing: false, lastTranscript: '', lastTranscriptAt: 0,
     commandQueue: Promise.resolve(), tasks: [], taskTimeouts: new Map(),
-    trackIndex: 0, trackURLs: new Map(), ignoreMicPrompt: false
+    musicBridge: 'checking'
   };
-
-  // These short loops are generated as WAV blobs, so the music player needs no download.
-  const tracks = [
-    {title: 'Orbit Drift', notes: [220, 277.18, 329.63, 277.18, 246.94, 293.66, 369.99, 293.66], bass: 110},
-    {title: 'Neon Horizon', notes: [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 349.23], bass: 130.81},
-    {title: 'Starlight Protocol', notes: [196, 246.94, 293.66, 246.94, 174.61, 220, 261.63, 220], bass: 98}
-  ];
+  const MUSIC_CHANNEL = 'jarvis-youtube-music-v1';
 
   const formatTime = (date = new Date()) => date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
   const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -99,6 +95,8 @@
   }
 
   function updateStatus() {
+    updateVoicePanel();
+    ui.app.dataset.state = state.isSpeaking ? 'speaking' : 'idle';
     ui.listeningToggle.setAttribute('aria-pressed', String(state.desired));
     ui.toggleLabel.textContent = `Always Listening: ${state.desired ? 'ON' : 'OFF'}`;
     ui.toggleHint.textContent = state.desired ? 'Click to stop the assistant' : 'Click to resume listening';
@@ -106,14 +104,12 @@
       ui.modeStatus.textContent = 'VOICE RECOGNITION UNAVAILABLE';
       ui.detailStatus.textContent = 'Please use Chrome or Edge for full voice features. Text commands still work.';
       ui.micState.textContent = 'UNSUPPORTED';
-      ui.app.dataset.state = 'idle';
       return;
     }
     if (!state.desired) {
       ui.modeStatus.textContent = 'VOICE INTERFACE STANDBY';
       ui.detailStatus.textContent = 'Listening stopped. Text commands remain available.';
       ui.micState.textContent = 'STOPPED';
-      ui.app.dataset.state = 'idle';
       return;
     }
     ui.modeStatus.textContent = state.calibrating ? 'CALIBRATING MIC...' : '🎙️ Listening... (always on)';
@@ -356,8 +352,10 @@
     state.desired = false;
     state.calibrating = false;
     if ('speechSynthesis' in window) speechSynthesis.cancel();
+    clearTimeout(state.voiceWatchdog);
     state.currentSpeech = null;
     state.isSpeaking = false;
+    state.voicePending = false;
     clearTimeout(state.retryTimer);
     clearTimeout(state.micRetryTimer);
     clearTimeout(state.startWatchdog);
@@ -388,9 +386,9 @@
     state.lastTranscript = transcript.toLowerCase();
     state.lastTranscriptAt = now;
     const wake = getWakeMatch(transcript);
-    addLog('user', transcript, {ignored: duplicate || !wake || state.isSpeaking});
+    addLog('user', transcript, {ignored: duplicate || !wake || state.isSpeaking || state.voicePending});
     if (duplicate) { addLog('system', 'Duplicate phrase ignored.', {ignored: true}); return; }
-    if (state.isSpeaking) { addLog('system', 'Ignored while Jarvis was speaking.', {ignored: true}); return; }
+    if (state.isSpeaking || state.voicePending) { addLog('system', 'Ignored while Jarvis was speaking.', {ignored: true}); return; }
     if (!wake) {
       const reason = confidence <= settings.confidence ? 'Low-confidence phrase without the wake word.' : `Ignored. Say “${settings.wakeWord}” first.`;
       addLog('system', reason, {ignored: true});
@@ -427,6 +425,7 @@
       ui.voiceSelect.add(new Option(`${voice.name} (${voice.lang})`, voice.voiceURI));
     });
     ui.voiceSelect.value = selected;
+    updateVoicePanel();
   }
 
   function selectedVoice() {
@@ -437,21 +436,77 @@
       voices.find((voice) => /^en/i.test(voice.lang));
   }
 
-  function speak(message) {
-    if (!settings.tts || !('speechSynthesis' in window)) { updateStatus(); return; }
+  function updateVoicePanel() {
+    if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+      ui.voiceStatus.textContent = 'VOICE OUTPUT UNAVAILABLE';
+      ui.voiceHint.textContent = 'This browser does not support spoken replies.';
+      return;
+    }
+    const voice = selectedVoice();
+    ui.voiceStatus.textContent = state.voiceError ? 'VOICE NEEDS ATTENTION' :
+      state.isSpeaking ? 'JARVIS IS SPEAKING' : state.voicePending ? 'STARTING VOICE...' :
+      !settings.tts ? 'SPOKEN REPLIES OFF' : 'READY TO SPEAK';
+    ui.voiceHint.textContent = state.voiceError || (!settings.tts && !state.isSpeaking && !state.voicePending ? 'Turn on spoken responses in Settings.' :
+      `${voice?.name || 'Browser voice'} · Replies play after each command.`);
+  }
+
+  function speak(message, force = false) {
+    if ((!settings.tts && !force) || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+      updateVoicePanel();
+      return;
+    }
+    clearTimeout(state.voiceWatchdog);
     speechSynthesis.cancel();
+    try { speechSynthesis.resume(); } catch { /* Some browsers expose synthesis without resume. */ }
     const utterance = new SpeechSynthesisUtterance(message);
     state.currentSpeech = utterance;
+    state.voicePending = true;
+    state.voiceError = '';
     utterance.voice = selectedVoice() || null;
     utterance.lang = utterance.voice?.lang || 'en-GB';
     utterance.rate = 1.02;
     utterance.pitch = 0.92;
-    utterance.onstart = () => { if (state.currentSpeech === utterance) { state.isSpeaking = true; updateStatus(); } };
-    utterance.onend = utterance.onerror = () => {
-      if (state.currentSpeech === utterance) { state.currentSpeech = null; state.isSpeaking = false; updateStatus(); }
+    utterance.onstart = () => {
+      if (state.currentSpeech !== utterance) return;
+      clearTimeout(state.voiceWatchdog);
+      state.voicePending = false;
+      state.isSpeaking = true;
+      state.voiceError = '';
+      updateStatus();
     };
-    try { speechSynthesis.speak(utterance); }
-    catch { state.currentSpeech = null; state.isSpeaking = false; updateStatus(); }
+    utterance.onend = () => {
+      if (state.currentSpeech !== utterance) return;
+      clearTimeout(state.voiceWatchdog);
+      state.currentSpeech = null;
+      state.voicePending = state.isSpeaking = false;
+      updateStatus();
+    };
+    utterance.onerror = (event) => {
+      if (state.currentSpeech !== utterance) return;
+      clearTimeout(state.voiceWatchdog);
+      state.currentSpeech = null;
+      state.voicePending = state.isSpeaking = false;
+      state.voiceError = event.error === 'interrupted' ? '' : 'Click Test Voice and check your browser audio settings.';
+      updateStatus();
+    };
+    updateVoicePanel();
+    try {
+      speechSynthesis.speak(utterance);
+      if (state.voicePending) {
+        state.voiceWatchdog = setTimeout(() => {
+          if (state.currentSpeech === utterance && state.voicePending) {
+            state.voicePending = false;
+            state.voiceError = 'Voice did not start. Click Test Voice to unlock audio.';
+            updateVoicePanel();
+          }
+        }, 2500);
+      }
+    } catch {
+      state.currentSpeech = null;
+      state.voicePending = state.isSpeaking = false;
+      state.voiceError = 'Voice could not start in this browser.';
+      updateStatus();
+    }
   }
 
   function openExternal(url, label) {
@@ -516,7 +571,7 @@
 
   function scheduleTask(type, label, delay) {
     // setTimeout is precise while the page runs; visibility checks catch late alerts.
-    const task = {id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`, type, label, due: Date.now() + delay};
+    const task = {id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`, type, label, due: Date.now() + delay};
     state.tasks.push(task);
     state.taskTimeouts.set(task.id, setTimeout(() => fireTask(task.id), delay));
     persistTasks();
@@ -574,23 +629,15 @@
     }},
     timer: {patterns: [/^set (?:a )?timer for (\d+(?:\.\d+)?) (seconds?|minutes?|hours?)\b/i], handler: (match) => scheduleTask('timer', 'Timer', parseDuration(match[1], match[2]))},
     reminder: {patterns: [/^remind me to (.+?) in (\d+(?:\.\d+)?) (seconds?|minutes?|hours?)\b/i], handler: (match) => scheduleTask('reminder', match[1], parseDuration(match[2], match[3]))},
-    playMusic: {patterns: [/^(?:play music|resume music|play song)\b/i], handler: async () => {
-      const played = await playMusic();
-      return played ? 'Right away, sir. Playing music.' : 'Press play in the music player to allow audio in this browser.';
-    }},
-    pauseMusic: {patterns: [/^(?:pause(?: music)?|pause song)\b/i], handler: () => { ui.musicPlayer.pause(); return 'Music paused.'; }},
-    stopMusic: {patterns: [/^stop music\b/i], handler: () => { ui.musicPlayer.pause(); ui.musicPlayer.currentTime = 0; return 'Music stopped.'; }},
-    nextTrack: {patterns: [/^(?:skip song|next track|next song)\b/i], handler: async () => {
-      const played = await selectTrack(state.trackIndex + 1, true);
-      return played ? `Playing ${tracks[state.trackIndex].title}.` : `${tracks[state.trackIndex].title} is selected. Press play to allow audio.`;
-    }},
-    previousTrack: {patterns: [/^(?:previous song|previous track|last song)\b/i], handler: async () => {
-      const played = await selectTrack(state.trackIndex - 1, true);
-      return played ? `Playing ${tracks[state.trackIndex].title}.` : `${tracks[state.trackIndex].title} is selected. Press play to allow audio.`;
-    }},
-    volumeUp: {patterns: [/^volume up\b/i], handler: () => { ui.musicPlayer.muted = false; ui.musicPlayer.volume = Math.min(1, ui.musicPlayer.volume + 0.15); return `Volume ${Math.round(ui.musicPlayer.volume * 100)} percent.`; }},
-    volumeDown: {patterns: [/^volume down\b/i], handler: () => { ui.musicPlayer.volume = Math.max(0, ui.musicPlayer.volume - 0.15); return `Volume ${Math.round(ui.musicPlayer.volume * 100)} percent.`; }},
-    mute: {patterns: [/^mute\b/i], handler: () => { ui.musicPlayer.muted = true; return 'Music muted.'; }},
+    playMusic: {patterns: [/^(?:play(?: music| song)?|resume(?: music)?)\b/i], handler: () => musicCommand('play')},
+    pauseMusic: {patterns: [/^(?:pause(?: music)?|pause song)\b/i], handler: () => musicCommand('pause')},
+    stopMusic: {patterns: [/^stop music\b/i], handler: () => musicCommand('stop')},
+    nextTrack: {patterns: [/^(?:skip(?: song| track)?|next(?: track| song)?)\b/i], handler: () => musicCommand('next')},
+    previousTrack: {patterns: [/^(?:previous(?: song| track)?|last song|back)\b/i], handler: () => musicCommand('previous')},
+    volumeUp: {patterns: [/^volume up\b/i], handler: () => musicCommand('volume-up')},
+    volumeDown: {patterns: [/^volume down\b/i], handler: () => musicCommand('volume-down')},
+    mute: {patterns: [/^mute\b/i], handler: () => musicCommand('mute')},
+    unmute: {patterns: [/^unmute\b/i], handler: () => musicCommand('unmute')},
     fullscreen: {patterns: [/^(?:go|enter) fullscreen\b/i], handler: async () => {
       try { await document.documentElement.requestFullscreen(); return 'Fullscreen engaged.'; }
       catch { return 'Use the fullscreen button in your browser if it blocked this voice command.'; }
@@ -618,49 +665,78 @@
     }}
   };
 
-  function makeTrackURL(index) {
-    // Synthesize a short PCM WAV and cache its blob URL for replay/track changes.
-    if (state.trackURLs.has(index)) return state.trackURLs.get(index);
-    const sampleRate = 16000, seconds = 8, count = sampleRate * seconds;
-    const data = new ArrayBuffer(44 + count * 2), view = new DataView(data);
-    const writeText = (offset, text) => { for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i)); };
-    writeText(0, 'RIFF'); view.setUint32(4, 36 + count * 2, true); writeText(8, 'WAVE'); writeText(12, 'fmt ');
-    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true); view.setUint16(34, 16, true);
-    writeText(36, 'data'); view.setUint32(40, count * 2, true);
-    const track = tracks[index];
-    for (let i = 0; i < count; i++) {
-      const t = i / sampleRate, beat = Math.floor(t * 2), phase = (t * 2) % 1;
-      const note = track.notes[beat % track.notes.length];
-      const envelope = Math.min(1, phase * 26) * Math.exp(-phase * 2.7);
-      const lead = (Math.sin(2 * Math.PI * note * t) + 0.2 * Math.sin(2 * Math.PI * note * 2 * t)) * envelope * 0.23;
-      const bass = Math.sin(2 * Math.PI * track.bass * t) * 0.15;
-      const kickPhase = t % 0.5;
-      const kick = Math.sin(2 * Math.PI * (65 - 30 * kickPhase) * kickPhase) * Math.exp(-kickPhase * 25) * 0.19;
-      const fade = Math.min(1, t * 4, (seconds - t) * 4);
-      const sample = Math.max(-1, Math.min(1, (lead + bass + kick) * fade));
-      view.setInt16(44 + i * 2, sample * 32767, true);
+  // A companion extension relays these tiny requests to the separate Music tab.
+  // This page never receives YouTube credentials or audio data.
+  function musicBridgeRequest(action, timeout = 4000) {
+    return new Promise((resolve) => {
+      const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      const targetOrigin = location.protocol === 'file:' ? '*' : location.origin;
+      const timer = setTimeout(() => finish({ok: false, code: 'NO_BRIDGE'}), timeout);
+      function finish(result) {
+        clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        resolve(result);
+      }
+      function onMessage(event) {
+        if (event.source !== window || (location.protocol !== 'file:' && event.origin !== location.origin)) return;
+        const data = event.data;
+        if (data?.channel !== MUSIC_CHANNEL || data.type !== 'response' || data.id !== id) return;
+        finish(data.result && typeof data.result === 'object' ? data.result : {ok: false, code: 'BRIDGE_ERROR'});
+      }
+      window.addEventListener('message', onMessage);
+      window.postMessage({channel: MUSIC_CHANNEL, type: 'request', id, action}, targetOrigin);
+    });
+  }
+
+  function showMusicBridge(result) {
+    const code = result?.code || (result?.ok ? 'READY' : 'BRIDGE_ERROR');
+    state.musicBridge = code;
+    if (code === 'NO_BRIDGE') {
+      ui.musicBridgeStatus.textContent = 'EXTENSION NOT CONNECTED';
+      ui.musicBridgeHint.textContent = location.protocol === 'file:' ?
+        'Open Jarvis in Chrome, Edge, or Brave and enable extension file access.' :
+        'Open Jarvis in Chrome, Edge, or Brave with the extension installed.';
+    } else if (code === 'NO_TAB') {
+      ui.musicBridgeStatus.textContent = 'OPEN YOUTUBE MUSIC';
+      ui.musicBridgeHint.textContent = 'The bridge is ready. Open music.youtube.com in this browser.';
+    } else if (code === 'NO_MEDIA') {
+      ui.musicBridgeStatus.textContent = 'CHOOSE A SONG';
+      ui.musicBridgeHint.textContent = 'YouTube Music is open. Start a song there first.';
+    } else if (result?.ok) {
+      ui.musicBridgeStatus.textContent = 'YOUTUBE MUSIC CONNECTED';
+      ui.musicBridgeHint.textContent = result.title ? `${result.title} · ${result.playing ? 'playing' : 'paused'}` : 'Ready for play, pause, and skip commands.';
+    } else {
+      ui.musicBridgeStatus.textContent = 'MUSIC LINK ERROR';
+      ui.musicBridgeHint.textContent = 'Reload YouTube Music and check extension site access.';
     }
-    const url = URL.createObjectURL(new Blob([data], {type: 'audio/wav'}));
-    state.trackURLs.set(index, url);
-    return url;
   }
 
-  async function selectTrack(index, autoplay = false) {
-    state.trackIndex = (index + tracks.length) % tracks.length;
-    const track = tracks[state.trackIndex];
-    ui.trackTitle.textContent = track.title;
-    ui.trackSubtitle.textContent = `Built-in ambient playlist · ${state.trackIndex + 1} / ${tracks.length}`;
-    ui.musicPlayer.src = makeTrackURL(state.trackIndex);
-    ui.musicPlayer.load();
-    if (autoplay) return playMusic();
-    return true;
+  async function checkMusicBridge() {
+    ui.musicBridgeStatus.textContent = 'CHECKING CONNECTION';
+    const result = await musicBridgeRequest('status', 1500);
+    showMusicBridge(result);
+    return result;
   }
 
-  async function playMusic() {
-    if (!ui.musicPlayer.src) await selectTrack(state.trackIndex);
-    try { await ui.musicPlayer.play(); return true; } catch { return false; }
+  async function musicCommand(action) {
+    const result = await musicBridgeRequest(action);
+    showMusicBridge(result);
+    if (result.ok) {
+      const replies = {
+        play: 'Right away. YouTube Music is playing.', pause: 'Music paused.',
+        stop: 'Music paused.', next: 'Skipping to the next song.',
+        previous: 'Back to the previous song.', 'volume-up': 'Volume raised.',
+        'volume-down': 'Volume lowered.', mute: 'Music muted.', unmute: 'Music unmuted.'
+      };
+      return action === 'volume-up' || action === 'volume-down' ?
+        `${replies[action]} ${Math.round(result.volume * 100)} percent.` : replies[action];
+    }
+    if (result.code === 'NO_BRIDGE') return 'To control YouTube Music, load the companion extension from the Jarvis folder. The setup guide has the steps.';
+    if (result.code === 'NO_TAB') return {text: 'Open YouTube Music in another tab and start a song first.', link: 'https://music.youtube.com/', linkLabel: 'Open YouTube Music ↗'};
+    if (result.code === 'NO_MEDIA') return 'Choose a song in YouTube Music first.';
+    if (result.code === 'CONTROL_NOT_FOUND') return 'I could not find that YouTube Music control. Reload the Music tab and try again.';
+    if (result.code === 'PLAY_BLOCKED') return 'Your browser blocked playback. Click Play in YouTube Music once, then ask me again.';
+    return 'I could not reach YouTube Music. Check the extension and reload the Music tab.';
   }
 
   function applyTheme() { document.body.dataset.theme = settings.theme === 'light' ? 'light' : 'dark'; }
@@ -704,17 +780,40 @@
 
   function wireUI() {
     // All user gestures are registered here so typed mode works without the mic.
-    ui.listeningToggle.addEventListener('click', () => { unlockAudio(); state.desired ? stopAssistant() : startAssistant(); });
-    ui.grantMicButton.addEventListener('click', () => { unlockAudio(); startAssistant(); });
-    ui.continueWithoutMic.addEventListener('click', () => { unlockAudio(); stopAssistant(); ui.permissionOverlay.hidden = true; });
+    ui.listeningToggle.addEventListener('click', () => {
+      unlockAudio();
+      if (state.desired) stopAssistant();
+      else { speak('Jarvis online. I am listening.'); startAssistant(); }
+    });
+    ui.grantMicButton.addEventListener('click', () => { unlockAudio(); speak('Jarvis online. I am listening.'); startAssistant(); });
+    ui.continueWithoutMic.addEventListener('click', () => {
+      unlockAudio(); stopAssistant(); ui.permissionOverlay.hidden = true;
+      speak('Text mode ready. Type a command and I will reply.');
+    });
+    ui.testVoiceButton.addEventListener('click', () => {
+      unlockAudio();
+      const hour = new Date().getHours();
+      const greeting = `Good ${hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'}. Jarvis online and ready to assist you.`;
+      addLog('jarvis', greeting);
+      speak(greeting, true);
+    });
+    ui.checkMusicButton.addEventListener('click', () => checkMusicBridge());
+    window.addEventListener('message', (event) => {
+      if (event.source !== window || (location.protocol !== 'file:' && event.origin !== location.origin)) return;
+      if (event.data?.channel === MUSIC_CHANNEL && event.data.type === 'bridge-ready') checkMusicBridge();
+    });
     ui.settingsButton.addEventListener('click', () => { fillSettings(); ui.settingsDialog.showModal(); });
     ui.closeSettings.addEventListener('click', () => ui.settingsDialog.close());
     ui.confidenceInput.addEventListener('input', () => { ui.confidenceOutput.value = Number(ui.confidenceInput.value).toFixed(2); });
     ui.settingsForm.addEventListener('submit', (event) => {
       event.preventDefault();
       settings = {...settings, wakeWord: normalize(ui.wakeWordInput.value) || 'Jarvis', weatherKey: ui.weatherKeyInput.value.trim(), voiceURI: ui.voiceSelect.value, confidence: Number(ui.confidenceInput.value), tts: ui.ttsInput.checked};
-      if (!settings.tts && 'speechSynthesis' in window) { speechSynthesis.cancel(); state.currentSpeech = null; state.isSpeaking = false; }
+      if (!settings.tts && 'speechSynthesis' in window) {
+        speechSynthesis.cancel(); clearTimeout(state.voiceWatchdog);
+        state.currentSpeech = null; state.voicePending = state.isSpeaking = false;
+      }
       saveStored(SETTINGS_KEY, settings);
+      updateVoicePanel();
       ui.wakeValue.textContent = settings.wakeWord.toUpperCase();
       ui.wakePrompt.textContent = `“HEY ${settings.wakeWord.toUpperCase()}”`;
       ui.settingsDialog.close();
@@ -740,11 +839,6 @@
       addLog('system', permission === 'granted' ? 'Notifications enabled for timers and reminders.' : 'Notifications were not enabled. Alerts still appear in the conversation.');
       updateNotificationButton();
     });
-    ui.previousTrack.addEventListener('click', () => selectTrack(state.trackIndex - 1, !ui.musicPlayer.paused));
-    ui.nextTrack.addEventListener('click', () => selectTrack(state.trackIndex + 1, !ui.musicPlayer.paused));
-    ui.playPause.addEventListener('click', () => ui.musicPlayer.paused ? playMusic() : ui.musicPlayer.pause());
-    ui.musicPlayer.addEventListener('play', () => { ui.playPause.textContent = 'Ⅱ'; ui.playPause.setAttribute('aria-label', 'Pause music'); });
-    ui.musicPlayer.addEventListener('pause', () => { ui.playPause.textContent = '▶'; ui.playPause.setAttribute('aria-label', 'Play music'); });
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && state.desired) {
         ensureMicrophone();
@@ -752,9 +846,11 @@
           try { state.recognition.abort(); } catch { scheduleRecognitionStart(250); }
         } else scheduleRecognitionStart(250);
       }
-      if (!document.hidden) state.tasks.filter((task) => task.due <= Date.now()).forEach((task) => fireTask(task.id));
+      if (!document.hidden) {
+        state.tasks.filter((task) => task.due <= Date.now()).forEach((task) => fireTask(task.id));
+        checkMusicBridge();
+      }
     });
-    window.addEventListener('beforeunload', () => state.trackURLs.forEach((url) => URL.revokeObjectURL(url)));
   }
 
   function fillSettings() {
@@ -794,6 +890,7 @@
       populateVoices();
       speechSynthesis.addEventListener?.('voiceschanged', populateVoices);
     }
+    setTimeout(checkMusicBridge, 500);
     if (!SpeechRecognition) {
       ui.permissionOverlay.hidden = true;
       addLog('system', 'Please use Chrome or Edge for full voice features. Typed commands still work.');
