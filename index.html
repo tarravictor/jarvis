@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#060d16">
+  <meta name="description" content="A browser-based JARVIS-inspired voice assistant.">
+  <title>J.A.R.V.I.S. · Voice Interface</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app" id="app" data-state="idle">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true"><span></span></span>
+        <div><strong>J.A.R.V.I.S.</strong><small>PERSONAL INTELLIGENCE SYSTEM</small></div>
+      </div>
+      <div class="topbar-right">
+        <span class="live-clock" id="liveClock" aria-label="Local time">--:--:--</span>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <span class="system-tag"><span class="tag-dot"></span> SYSTEM ONLINE</span>
+        <button class="icon-button" id="settingsButton" type="button" aria-label="Open settings" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 2.5h3l.5 2.1c.6.2 1.2.4 1.7.7l1.9-1.1 2.1 2.1-1.1 1.9c.3.5.5 1.1.7 1.7l2.1.5v3l-2.1.5c-.2.6-.4 1.2-.7 1.7l1.1 1.9-2.1 2.1-1.9-1.1c-.5.3-1.1.5-1.7.7l-.5 2.1h-3l-.5-2.1c-.6-.2-1.2-.4-1.7-.7l-1.9 1.1-2.1-2.1 1.1-1.9c-.3-.5-.5-1.1-.7-1.7l-2.1-.5v-3l2.1-.5c.2-.6.4-1.2.7-1.7L4.3 6.3l2.1-2.1 1.9 1.1c.5-.3 1.1-.5 1.7-.7l.5-2.1Z"/><circle cx="12" cy="12" r="3.2"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="primary-column" aria-label="Voice interface">
+        <div class="section-heading"><span class="eyebrow">INTERFACE / 01</span><span class="fine-line"></span><span class="section-number">VOICE CORE</span></div>
+
+        <div class="hero-panel">
+          <div class="hero-corner corner-tl"></div><div class="hero-corner corner-tr"></div>
+          <div class="hero-corner corner-bl"></div><div class="hero-corner corner-br"></div>
+          <div class="hero-top"><span><span class="tiny-diamond"></span> ACTIVE AUDIO CHANNEL</span><span id="sessionId">SESSION 001</span></div>
+
+          <div class="orb-scene" aria-hidden="true">
+            <div class="orb-halo"></div><div class="orb-grid"></div>
+            <div class="orbit orbit-outer"></div><div class="orbit orbit-mid"></div><div class="orbit orbit-inner"></div>
+            <canvas id="orbCanvas"></canvas>
+            <div class="orb-core"><div class="orb-core-inner"><span class="orb-monogram">J</span></div></div>
+          </div>
+
+          <div class="hero-status">
+            <div class="hero-status-line"><span class="status-spark" aria-hidden="true"></span><span id="modeStatus">INITIALIZING INTERFACE</span></div>
+            <p id="detailStatus">Requesting microphone access…</p>
+            <p class="interim" id="interimTranscript" aria-live="off"></p>
+          </div>
+          <div class="hero-bottom"><span>VOICE ACTIVITY DETECTION</span><span id="orbLevel">00%</span></div>
+        </div>
+
+        <div class="command-strip">
+          <button class="power-button" id="listeningToggle" type="button" aria-pressed="true">
+            <span class="power-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2v10M5.5 5.7a9 9 0 1 0 13 0"/></svg></span>
+            <span><strong id="toggleLabel">Always Listening: ON</strong><small id="toggleHint">Click to stop the assistant</small></span>
+            <span class="toggle-track" aria-hidden="true"><span></span></span>
+          </button>
+          <div class="command-prompt"><span class="prompt-marker">&gt;</span> SAY <strong id="wakePrompt">“HEY JARVIS”</strong> TO BEGIN</div>
+        </div>
+
+        <div class="telemetry-grid">
+          <article class="telemetry-card">
+            <div class="card-label"><span>01</span> MICROPHONE</div>
+            <div class="telemetry-value" id="micState">CONNECTING</div>
+            <div class="meter" role="meter" aria-label="Microphone level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="noiseMeter"><span id="noiseMeterFill"></span></div>
+            <div class="telemetry-foot"><span id="noiseNote">Calibrating mic...</span><span id="noiseValue">0%</span></div>
+          </article>
+          <article class="telemetry-card">
+            <div class="card-label"><span>02</span> WAKE WORD</div>
+            <div class="telemetry-value" id="wakeValue">JARVIS</div>
+            <div class="mini-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="telemetry-foot"><span>VOICE GATE</span><span class="accent-text">ARMED</span></div>
+          </article>
+          <article class="telemetry-card">
+            <div class="card-label"><span>03</span> SESSION UPTIME</div>
+            <div class="telemetry-value tabular" id="uptime">00:00:00</div>
+            <div class="uptime-rule"><span></span></div>
+            <div class="telemetry-foot"><span>RECOVERIES</span><span id="restartCount">00</span></div>
+          </article>
+        </div>
+
+        <section class="music-panel" aria-label="Music player">
+          <div class="music-art" aria-hidden="true"><span>♫</span></div>
+          <div class="music-info"><span class="eyebrow">AUDIO PLAYER</span><strong id="trackTitle">Orbit Drift</strong><small id="trackSubtitle">Built-in ambient playlist · 1 / 3</small></div>
+          <div class="music-controls">
+            <button id="previousTrack" type="button" aria-label="Previous track" title="Previous track">⏮</button>
+            <button id="playPause" class="play-control" type="button" aria-label="Play music" title="Play music">▶</button>
+            <button id="nextTrack" type="button" aria-label="Next track" title="Next track">⏭</button>
+          </div>
+          <audio id="musicPlayer" controls loop preload="none" aria-label="Built-in music player"></audio>
+        </section>
+      </section>
+
+      <aside class="secondary-column" aria-label="Conversation and activity">
+        <div class="section-heading"><span class="eyebrow">INTERFACE / 02</span><span class="fine-line"></span><span class="section-number">ACTIVITY FEED</span></div>
+        <section class="chat-panel">
+          <div class="chat-header"><div><span class="eyebrow">LIVE TRANSCRIPT</span><h1>Conversation</h1></div><button class="text-button" id="clearLog" type="button">CLEAR LOG</button></div>
+          <div class="chat-list" id="chatList" role="log" aria-live="polite" aria-relevant="additions">
+            <div class="chat-empty" id="chatEmpty"><span class="empty-glyph" aria-hidden="true">◎</span><strong>Standing by.</strong><p>Say “Hey Jarvis” followed by a command, or type below.</p></div>
+          </div>
+          <form class="text-form" id="textForm"><label class="sr-only" for="textCommand">Type a command</label><span class="input-prefix" aria-hidden="true">&gt;</span><input id="textCommand" type="text" autocomplete="off" placeholder="Type a command..." maxlength="300"><button type="submit" aria-label="Send command">➜</button></form>
+          <p class="text-help">Typed commands work without a wake word or microphone.</p>
+        </section>
+
+        <section class="tasks-panel"><div class="tasks-heading"><span class="eyebrow">UPCOMING ALERTS</span><button id="notifyButton" type="button">ENABLE NOTIFICATIONS</button><span id="taskCount">00</span></div><div class="tasks-list" id="tasksList"><p class="no-tasks">No timers or reminders set.</p></div></section>
+        <p class="browser-note">Chrome or Edge is recommended. Background tabs, closed pages, microphone permissions, and mobile power saving can interrupt recognition. Some browsers send audio to their speech service.</p>
+      </aside>
+    </main>
+
+    <footer class="footer"><span>J.A.R.V.I.S. / BROWSER EDITION</span><span>LOCAL INTERFACE <span class="footer-dot">◆</span> READY WHEN YOU ARE</span></footer>
+  </div>
+
+  <div class="permission-overlay" id="permissionOverlay" role="dialog" aria-modal="true" aria-labelledby="permissionTitle">
+    <div class="permission-card"><span class="permission-symbol" aria-hidden="true">◉</span><span class="eyebrow">MICROPHONE ACCESS</span><h2 id="permissionTitle">Your voice is the interface.</h2><p>Allow microphone access to enable wake-word commands and the live sound display. Your browser may ask for permission. You can still type commands without a mic.</p><p class="permission-message" id="permissionMessage">Requesting access…</p><button class="primary-action" id="grantMicButton" type="button">Enable microphone <span>↗</span></button><button class="secondary-action" id="continueWithoutMic" type="button">Continue with text only</button></div>
+  </div>
+
+  <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsTitle">
+    <form id="settingsForm" method="dialog">
+      <div class="settings-header"><div><span class="eyebrow">SYSTEM PREFERENCES</span><h2 id="settingsTitle">Settings</h2></div><button type="button" class="icon-button" id="closeSettings" aria-label="Close settings">✕</button></div>
+      <label class="field"><span>Wake word</span><input id="wakeWordInput" type="text" maxlength="30" value="Jarvis" required><small>“Hey” may be added before your wake word.</small></label>
+      <label class="field"><span>OpenWeatherMap API key</span><input id="weatherKeyInput" type="password" autocomplete="off" placeholder="Enter your key for weather"><small>Saved in this browser's local storage.</small></label>
+      <label class="field"><span>Voice</span><select id="voiceSelect"><option value="">Automatic English voice</option></select></label>
+      <label class="field"><span>Confidence threshold <output id="confidenceOutput">0.60</output></span><input id="confidenceInput" type="range" min="0" max="1" step="0.05" value="0.6"><small>A spoken wake word is accepted even if confidence is lower.</small></label>
+      <label class="switch-field"><span><strong>Spoken responses</strong><small>Keep recognition active while Jarvis speaks.</small></span><input id="ttsInput" type="checkbox" checked><span class="switch-ui" aria-hidden="true"></span></label>
+      <button class="primary-action save-settings" type="submit">Save settings <span>✓</span></button>
+    </form>
+  </dialog>
+</body>
+</html>
